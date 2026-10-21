@@ -137,6 +137,29 @@ class ConvertTests(unittest.TestCase):
         path = self.write("sample.docx", buf.getvalue())
         self.assertEqual(convert_path(path), "First paragraph\n\nمرحبا بالعالم\n")
 
+    def test_docx_too_large_is_rejected(self):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as package:
+            package.writestr("word/document.xml", b"<a>" + b" " * (65 * 1024 * 1024) + b"</a>")
+        path = self.write("big.docx", buf.getvalue())
+        with self.assertRaisesRegex(ConvertError, "too large"):
+            convert_path(path)
+
+    def test_docx_deep_nesting(self):
+        w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+        xml = (
+            f'<w:document xmlns:w="{w}"><w:body><w:p>'
+            + "<w:r>" * 5000
+            + "<w:t>deep</w:t>"
+            + "</w:r>" * 5000
+            + "</w:p></w:body></w:document>"
+        )
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as package:
+            package.writestr("word/document.xml", xml)
+        path = self.write("deep.docx", buf.getvalue())
+        self.assertEqual(convert_path(path), "deep\n")
+
     def test_pdf_text(self):
         path = self.write("hello.pdf", simple_pdf("HelloPDF"))
         out = convert_path(path)
