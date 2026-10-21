@@ -2,9 +2,12 @@ import csv
 import io
 import re
 import zipfile
+import zlib
 from html.parser import HTMLParser
 from pathlib import Path
 from xml.etree import ElementTree as ET
+
+MAX_DOCX_XML = 64 * 1024 * 1024
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
@@ -84,11 +87,19 @@ def docx_to_markdown(path):
     try:
         with zipfile.ZipFile(path) as package:
             try:
-                xml = package.read("word/document.xml")
+                info = package.getinfo("word/document.xml")
             except KeyError as exc:
                 raise ConvertError("docx is missing word/document.xml") from exc
-            except RuntimeError as exc:
+            # file_size comes from the zip header, so the read is capped too.
+            if info.file_size > MAX_DOCX_XML:
+                raise ConvertError("docx text part is too large")
+            try:
+                with package.open(info) as part:
+                    xml = part.read(MAX_DOCX_XML + 1)
+            except (RuntimeError, NotImplementedError, zlib.error) as exc:
                 raise ConvertError("could not read docx") from exc
+            if len(xml) > MAX_DOCX_XML:
+                raise ConvertError("docx text part is too large")
     except zipfile.BadZipFile as exc:
         raise ConvertError("not a docx file") from exc
     if xml.startswith(b"\xef\xbb\xbf"):
@@ -109,22 +120,21 @@ def docx_to_markdown(path):
 
 def _paragraph_text(paragraph):
     # Nested w:p nodes are visited by the caller on their own.
+    # A stack instead of recursion, so deeply nested XML cannot crash it.
     parts = []
-
-    def walk(node):
-        for child in list(node):
-            if child.tag == W + "p":
-                continue
-            if child.tag == W + "t":
-                parts.append(child.text or "")
-            elif child.tag == W + "tab":
-                parts.append("\t")
-            elif child.tag in {W + "br", W + "cr"}:
-                parts.append("\n")
-            else:
-                walk(child)
-
-    walk(paragraph)
+    stack = list(reversed(list(paragraph)))
+    while stack:
+        child = stack.pop()
+        if child.tag == W + "p":
+            continue
+        if child.tag == W + "t":
+            parts.append(child.text or "")
+        elif child.tag == W + "tab":
+            parts.append("\t")
+        elif child.tag in {W + "br", W + "cr"}:
+            parts.append("\n")
+        else:
+            stack.extend(reversed(list(child)))
     return "".join(parts)
 
 

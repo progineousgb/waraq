@@ -16,7 +16,7 @@ waraq needs Python 3.11 or newer. From this directory:
 pip install -e .
 ```
 
-The install puts a `waraq` command on PATH and installs pypdf, which PDF conversion uses. On Windows:
+The install puts a `waraq` command on PATH and installs pypdf, which PDF conversion uses. Then:
 
 ```
 waraq notes.html
@@ -104,7 +104,7 @@ waraq [-h] [-o OUTPUT] file
 - `.txt` and `.md` are copied. Newlines are normalized, and a final newline is added when the file does not already end with one.
 - `.html` and `.htm` keep `h1` through `h6`, paragraphs, links, `ul` / `ol` / `li`, `strong` / `b`, `em` / `i`, `code`, and line breaks. `script`, `style`, `head`, and `title` are dropped. An image contributes its alt text.
 - `.csv` is read as comma-separated values. The first row is the header. Short rows are padded to the widest row. A newline inside a cell becomes a space.
-- `.docx` is read as a zip package. Paragraph text comes from `word/document.xml`.
+- `.docx` is read as a zip package. Paragraph text comes from `word/document.xml`, which may be at most 64 MB once unpacked.
 - `.pdf` is read with pypdf. Each non-empty page is one block.
 
 `-o` and `--output` write the Markdown to that path instead of stdout. `-h` and `--help` print the usage line.
