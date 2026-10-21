@@ -11,7 +11,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from waraq.cli import main
 from waraq.convert import ConvertError, convert_path
 
-
 HTML_SAMPLE = """<!DOCTYPE html>
 <html>
 <head>
@@ -49,8 +48,10 @@ def simple_pdf(text):
     objects = [
         b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
         b"2 0 obj\n<< /Type /Pages /Count 1 /Kids [3 0 R] >>\nendobj\n",
-        b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 144] "
-        b"/Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n",
+        (
+            b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 144] "
+            b"/Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n"
+        ),
         b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream\nendobj\n",
         b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
     ]
@@ -112,19 +113,7 @@ class ConvertTests(unittest.TestCase):
         out = convert_path(path)
         self.assertEqual(
             out,
-            "\n".join(
-                [
-                    "# Title",
-                    "",
-                    "Hello [link](https://example.com).",
-                    "",
-                    "مرحبا",
-                    "",
-                    "- One",
-                    "- Two",
-                    "",
-                ]
-            ),
+            "# Title\n\nHello [link](https://example.com).\n\nمرحبا\n\n- One\n- Two\n",
         )
         self.assertNotIn("Ignore Me", out)
         self.assertNotIn("alert", out)
@@ -208,6 +197,30 @@ class ConvertTests(unittest.TestCase):
         self.assertNotIn("%29", out)
         self.assertIn("link", out)
         self.assertIn("http://x.com", out)
+
+
+class SafetyTests(unittest.TestCase):
+    def test_unsafe_schemes_are_dropped(self):
+        from waraq.convert import html_to_markdown
+        for href in ["javascript:alert(1)", "JavaScript:alert(1)", "java\tscript:alert(1)",
+                     " javascript:alert(1)", "data:text/html,x", "vbscript:x", "file:///etc/passwd"]:
+            out = html_to_markdown(f'<p><a href="{href}">click</a></p>')
+            self.assertEqual(out, "click\n", href)
+
+    def test_safe_schemes_are_kept(self):
+        from waraq.convert import html_to_markdown
+        self.assertEqual(html_to_markdown('<p><a href="https://a.example/x">a</a></p>'), "[a](https://a.example/x)\n")
+        self.assertEqual(html_to_markdown('<p><a href="http://a.example">a</a></p>'), "[a](http://a.example)\n")
+        self.assertEqual(html_to_markdown('<p><a href="mailto:x@a.example">m</a></p>'), "[m](mailto:x@a.example)\n")
+        self.assertEqual(html_to_markdown('<p><a href="/docs/page">r</a></p>'), "[r](/docs/page)\n")
+
+    def test_escaped_markup_stays_text(self):
+        from waraq.convert import html_to_markdown
+        out = html_to_markdown("<p>&lt;script&gt;alert(1)&lt;/script&gt; &amp; more</p>")
+        self.assertNotIn("<script>", out)
+        self.assertEqual(out, "&lt;script&gt;alert(1)&lt;/script&gt; &amp; more\n")
+        out = html_to_markdown('<p><a href="https://a.example">&lt;img src=x onerror=alert(1)&gt;</a></p>')
+        self.assertNotIn("<img", out)
 
 
 if __name__ == "__main__":
