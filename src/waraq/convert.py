@@ -165,8 +165,28 @@ def pdf_to_markdown(path):
 _LIST_ITEM = re.compile(r"^(?:- |\d+\. )")
 
 
+_SCHEME = re.compile(r"^([a-zA-Z][a-zA-Z0-9+.-]*):")
+SAFE_SCHEMES = {"http", "https", "mailto"}
+
+
+def _safe_href(href):
+    # Browsers ignore control characters and whitespace inside a scheme,
+    # so "java\tscript:" is still javascript:. Check with them removed.
+    probe = "".join(ch for ch in href if ord(ch) > 0x20 and ord(ch) != 0x7F)
+    match = _SCHEME.match(probe)
+    if match is None:
+        return True
+    return match.group(1).lower() in SAFE_SCHEMES
+
+
+def _escape_text(data):
+    return data.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def _md_link(text, href):
     text = text.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
+    if not _safe_href(href):
+        return text
     cleaned = []
     for ch in href.strip():
         if ch.isspace():
@@ -200,8 +220,8 @@ def html_to_markdown(text):
 
 
 class _HTMLToMarkdown(HTMLParser):
-    SKIP = {"script", "style", "head", "title"}
-    WRAP = {
+    SKIP = frozenset({"script", "style", "head", "title"})
+    WRAP = frozenset({
         "div",
         "section",
         "article",
@@ -220,7 +240,7 @@ class _HTMLToMarkdown(HTMLParser):
         "form",
         "figure",
         "figcaption",
-    }
+    })
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
@@ -264,7 +284,7 @@ class _HTMLToMarkdown(HTMLParser):
         elif tag == "img":
             alt = attr.get("alt", "").strip()
             if alt:
-                self._append(alt)
+                self._append(_escape_text(alt))
 
     def handle_endtag(self, tag):
         tag = tag.lower()
@@ -319,7 +339,9 @@ class _HTMLToMarkdown(HTMLParser):
     def handle_data(self, data):
         if self.skip_depth:
             return
-        self._append(data)
+        # convert_charrefs has already decoded &lt;script&gt; to <script>.
+        # Encode it again so the Markdown never carries live HTML.
+        self._append(_escape_text(data))
 
     def close(self):
         super().close()

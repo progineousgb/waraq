@@ -10,9 +10,21 @@ With no `-o`, that text is the whole standard output. With `-o`, waraq writes th
 
 ## Install and run
 
-waraq needs Python 3.11 or newer. From this directory:
+waraq needs Python 3.11 or newer. Create a virtual environment in this directory and install into it.
+
+Linux and macOS:
 
 ```
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -e .
+```
+
+Windows (PowerShell):
+
+```
+py -m venv .venv
+.venv\Scripts\Activate.ps1
 pip install -e .
 ```
 
@@ -28,7 +40,7 @@ waraq note.docx -o note.md
 
 ## Example
 
-These results are from running `waraq` on this machine. The Markdown blocks are the standard output, unchanged.
+These results are from real runs of `waraq`. The Markdown blocks are the standard output, unchanged.
 
 `notes.html`:
 
@@ -102,7 +114,7 @@ waraq [-h] [-o OUTPUT] file
 `file` is the input path. The extension selects the converter:
 
 - `.txt` and `.md` are copied. Newlines are normalized, and a final newline is added when the file does not already end with one.
-- `.html` and `.htm` keep `h1` through `h6`, paragraphs, links, `ul` / `ol` / `li`, `strong` / `b`, `em` / `i`, `code`, and line breaks. `script`, `style`, `head`, and `title` are dropped. An image contributes its alt text.
+- `.html` and `.htm` keep `h1` through `h6`, paragraphs, links, `ul` / `ol` / `li`, `strong` / `b`, `em` / `i`, `code`, and line breaks. `script`, `style`, `head`, and `title` are dropped. An image contributes its alt text. Links keep only `http:`, `https:`, `mailto:`, and relative targets; any other scheme, such as `javascript:` or `data:`, is dropped and only the link text remains. Text is written with `&`, `<`, and `>` encoded as `&amp;`, `&lt;`, and `&gt;`, so `&lt;script&gt;` in the source never becomes a real `<script>` tag.
 - `.csv` is read as comma-separated values. The first row is the header. Short rows are padded to the widest row. A newline inside a cell becomes a space.
 - `.docx` is read as a zip package. Paragraph text comes from `word/document.xml`, which may be at most 64 MB once unpacked.
 - `.pdf` is read with pypdf. Each non-empty page is one block.
